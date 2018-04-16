@@ -3,12 +3,14 @@ Sliding-window-based job/task queue class (& example of use.)
 
 May use ``multiprocessing.Process`` or ``threading.Thread`` objects as queue
 items, though within Fabric itself only ``Process`` objects are used/supported.
+
+Local modification: changed all Process references to Thread references
 """
 
 from __future__ import with_statement
 import time
 import Queue
-from multiprocessing import Process
+from threading import Thread
 
 from fabric.network import ssh
 from fabric.context_managers import settings
@@ -175,8 +177,8 @@ class JobQueue(object):
 
         # Attach exit codes now that we're all done & have joined all jobs
         for job in self._completed:
-            if isinstance(job, Process):
-                results[job.name]['exit_code'] = job.exitcode
+            if isinstance(job, Thread):
+                results[job.name]['exit_code'] = 0
 
         return results
 

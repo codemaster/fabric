@@ -6,6 +6,10 @@ import os
 import sys
 from optparse import make_option
 
+import threading
+import copy
+import collections
+
 from fabric.network import HostConnectionCache, ssh
 from fabric.version import get_version
 from fabric.utils import _AliasDict, _AttributeDict
@@ -325,13 +329,74 @@ env_options = [
 # Environment dictionary - actual dictionary object
 #
 
+class CopyOnThreadDict(collections.MutableMapping):
+    def __init__(self, init_value):
+        tid = threading.current_thread().name
+
+        # We have to reach around the custom getattr/setattr here.
+        object.__setattr__(self, 'main_tid', threading.current_thread().name)
+        object.__setattr__(self, 'ddict', {tid : init_value})
+
+    def __check_copy(self):
+        ctid = threading.current_thread().name
+        if ctid not in self.ddict:
+            self.ddict[ctid] = copy.copy(self.ddict[self.main_tid])
+        return ctid
+
+    def __setitem__(self, key, item):
+        ctid = self.__check_copy()
+        self.ddict[ctid][key] = item
+
+    def __getitem__(self, key):
+        ctid = self.__check_copy()
+        return self.ddict[ctid][key]
+
+
+    def __delitem__(self, key):
+        ctid = self.__check_copy()
+        del self.ddict[ctid][key]
+
+    def __iter__(self):
+        ctid = self.__check_copy()
+        return iter(self.ddict[ctid])
+    def __len__(self):
+        ctid = self.__check_copy()
+        return len(self.ddict[ctid])
+    # The final two methods aren't required, but nice for demo purposes:
+    def __str__(self):
+        '''returns simple dict representation of the mapping'''
+        ctid = self.__check_copy()
+        return str(self.ddict[ctid])
+
+    def __repr__(self):
+        '''echoes class, id, & reproducible representation in the REPL'''
+        ctid = self.__check_copy()
+        return '{}, CopyOnThreadDict({})'.format(super(CopyOnThreadDict, self).__repr__(),
+                                  self.ddict[ctid])
+
+    def first(self, *names):
+        for name in names:
+            value = self.get(name)
+            if value:
+                return value
+
+    def __getattr__(self, key):
+        try:
+            return self[key]
+        except KeyError:
+            # to conform with __getattr__ spec
+            raise AttributeError(key)
+
+    def __setattr__(self, key, value):
+        self[key] = value
 
 # Global environment dict. Currently a catchall for everything: config settings
 # such as global deep/broad mode, host lists, username etc.
 # Most default values are specified in `env_options` above, in the interests of
 # preserving DRY: anything in here is generally not settable via the command
 # line.
-env = _AttributeDict({
+#env = _AttributeDict({
+env = CopyOnThreadDict({
     'abort_exception': None,
     'again_prompt': 'Sorry, try again.',
     'all_hosts': [],
