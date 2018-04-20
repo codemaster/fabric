@@ -4,7 +4,7 @@ import inspect
 import sys
 import textwrap
 import threading
-import queue
+from multiprocessing import Queue
 
 from fabric import state
 from fabric.utils import abort, warn, error
@@ -358,7 +358,7 @@ def execute(task, *args, **kwargs):
     # Get pool size for this task
     pool_size = task.get_pool_size(my_env['all_hosts'], state.env.pool_size)
     # Set up job queue in case parallel is needed
-    resp_queue = queue.Queue() if parallel else None
+    resp_queue = Queue() if parallel else None
     jobs = JobQueue(pool_size, resp_queue)
     if state.output.debug:
         jobs._debug = True
